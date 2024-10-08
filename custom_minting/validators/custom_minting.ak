@@ -358,7 +358,8 @@ test mint_fenix() {
 
   let tx = get_onetime_tx(mint)
 
-  // mint and spend
+  // minting fenix token burns always and onetime
+  // attach transaction to spend always and onetime after minting fenix
   custom_minting.mint(utxo, Mint, mock_policy_id(0), tx)
 }
 
