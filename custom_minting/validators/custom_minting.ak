@@ -55,17 +55,14 @@ validator custom_minting(utxo_ref: OutputReference) {
 
     let is_token_name_valid = validate_token_name(assets)
 
-    expect Some(input) =
-      list.find(inputs, fn(input) { input.output_reference == utxo_ref })
-
     when rdmr is {
       Mint -> {
-        let is_mint_valid = validate_mint(assets, tx, input.output)
+        let is_mint_valid = validate_mint(assets, tx, inputs, utxo_ref)
 
         is_token_name_valid? && is_mint_valid?
       }
       Burn -> {
-        let is_burn_valid = validate_burn(assets, tx, input.output)
+        let is_burn_valid = validate_burn(assets, tx, inputs)
 
         is_token_name_valid? && is_burn_valid?
       }
@@ -94,7 +91,12 @@ fn validate_token_name(tokens) {
   }
 }
 
-fn validate_mint(tokens: Pairs<ByteArray, Int>, tx: Transaction, output: Output) {
+fn validate_mint(
+  tokens: Pairs<ByteArray, Int>,
+  tx: Transaction,
+  inputs: List<Input>,
+  utxo_ref: OutputReference,
+) {
   let fenix_exists =
     if list.any(
       tokens,
@@ -116,7 +118,9 @@ fn validate_mint(tokens: Pairs<ByteArray, Int>, tx: Transaction, output: Output)
             amount >= 1
           }
         "onetime" -> {
-          expect InlineDatum(datum_data) = output.datum
+          expect Some(input) =
+            list.find(inputs, fn(input) { input.output_reference == utxo_ref })
+          expect InlineDatum(datum_data) = input.output.datum
           expect MintingDatum { owner } = datum_data
           let is_signed = list.has(tx.extra_signatories, owner)
           if fenix_exists {
@@ -178,12 +182,28 @@ fn validate_spend(
   }
 }
 
-fn validate_burn(tokens: Pairs<ByteArray, Int>, tx: Transaction, output: Output) {
+fn validate_burn(
+  tokens: Pairs<ByteArray, Int>,
+  tx: Transaction,
+  inputs: List<Input>,
+) {
   if list.all(
     tokens,
     fn(Pair(name, amount)) {
       if to_bytearray(to_string(name)) == "onetime" {
-        expect InlineDatum(datum_data) = output.datum
+        expect Some(input) =
+          list.find(
+            inputs,
+            fn(input) {
+              expect InlineDatum(datum_data) = input.output.datum
+              if datum_data is Data {
+                True
+              } else {
+                False
+              }
+            },
+          )
+        expect InlineDatum(datum_data) = input.output.datum
         expect MintingDatum { owner } = datum_data
         let is_signed = list.has(tx.extra_signatories, owner)
         is_signed && amount < 0
@@ -360,4 +380,45 @@ test mint_onetime() {
   let tx = get_onetime_tx(mint)
 
   custom_minting.mint(utxo, Mint, mock_policy_id(0), tx)
+}
+
+test fail_mint_onetime() {
+  // Testing onetime minting with different input utxos
+  // If program crashes and test shows failed, it means the test is successful
+
+  let utxo = mock_utxo_ref(0, 0)
+
+  let mint = from_asset_list([Pair(mock_policy_id(0), [Pair("onetime", 1)])])
+
+  let tx = get_onetime_tx(mint)
+
+  let tx_input =
+    Input {
+      output_reference: mock_utxo_ref(1, 0),
+      output: Output {
+        address: Address {
+          payment_credential: Script(mock_policy_id(0)),
+          stake_credential: None,
+        },
+        value: zero,
+        datum: InlineDatum(MintingDatum { owner: mock_pub_key_hash(0) }),
+        reference_script: None,
+      },
+    }
+  let tx_inputs = [tx_input]
+
+  let tx2 =
+    Transaction {
+      ..placeholder,
+      mint: mint,
+      inputs: tx_inputs,
+      extra_signatories: [mock_pub_key_hash(0)],
+    }
+
+  custom_minting.mint(utxo, Mint, mock_policy_id(0), tx) && custom_minting.mint(
+    utxo,
+    Mint,
+    mock_policy_id(0),
+    tx2,
+  )
 }
