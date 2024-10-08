@@ -1,13 +1,14 @@
 use aiken/collection/dict
 use aiken/collection/list
+use aiken/crypto.{VerificationKeyHash}
 use aiken/primitive/bytearray.{to_string}
 use aiken/primitive/string.{to_bytearray}
 use cardano/address.{Address, Script}
 use cardano/assets.{PolicyId, from_asset_list, zero}
 use cardano/transaction.{
-  Input, NoDatum, Output, OutputReference, Transaction, placeholder,
+  InlineDatum, Input, NoDatum, Output, OutputReference, Transaction, placeholder,
 }
-use mocktail/virgin_key_hash.{mock_policy_id}
+use mocktail/virgin_key_hash.{mock_policy_id, mock_pub_key_hash}
 use mocktail/virgin_output_reference.{mock_utxo_ref}
 
 pub type Action {
@@ -15,8 +16,17 @@ pub type Action {
   Burn
 }
 
+pub type MintingDatum {
+  owner: VerificationKeyHash,
+}
+
 validator custom_minting(utxo_ref: OutputReference) {
-  spend(_d: Option<Data>, _r: Data, own_ref: OutputReference, tx: Transaction) {
+  spend(
+    datum: Option<MintingDatum>,
+    _r: Data,
+    own_ref: OutputReference,
+    tx: Transaction,
+  ) {
     let Transaction { inputs, mint, .. } = tx
 
     expect Some(own_input) =
@@ -30,7 +40,7 @@ validator custom_minting(utxo_ref: OutputReference) {
         |> dict.to_pairs()
 
     let is_token_name_valid = validate_token_name(assets)
-    let is_spend_valid = validate_burn_and_spend(assets)
+    let is_spend_valid = validate_spend(assets, tx, datum)
 
     is_token_name_valid? && is_spend_valid?
   }
@@ -45,17 +55,17 @@ validator custom_minting(utxo_ref: OutputReference) {
 
     let is_token_name_valid = validate_token_name(assets)
 
+    expect Some(input) =
+      list.find(inputs, fn(input) { input.output_reference == utxo_ref })
+
     when rdmr is {
       Mint -> {
-        let is_mint_valid = validate_mint(assets)
-
-        expect Some(_input) =
-          list.find(inputs, fn(input) { input.output_reference == utxo_ref })
+        let is_mint_valid = validate_mint(assets, tx, input.output)
 
         is_token_name_valid? && is_mint_valid?
       }
       Burn -> {
-        let is_burn_valid = validate_burn_and_spend(assets)
+        let is_burn_valid = validate_burn(assets, tx, input.output)
 
         is_token_name_valid? && is_burn_valid?
       }
@@ -84,7 +94,7 @@ fn validate_token_name(tokens) {
   }
 }
 
-fn validate_mint(tokens: Pairs<ByteArray, Int>) {
+fn validate_mint(tokens: Pairs<ByteArray, Int>, tx: Transaction, output: Output) {
   let fenix_exists =
     if list.any(
       tokens,
@@ -105,12 +115,16 @@ fn validate_mint(tokens: Pairs<ByteArray, Int>) {
           } else {
             amount >= 1
           }
-        "onetime" ->
+        "onetime" -> {
+          expect InlineDatum(datum_data) = output.datum
+          expect MintingDatum { owner } = datum_data
+          let is_signed = list.has(tx.extra_signatories, owner)
           if fenix_exists {
-            amount < 0
+            is_signed && amount < 0
           } else {
-            amount == 1
+            is_signed && amount == 1
           }
+        }
         "fenix" -> and {
             amount >= 1,
             list.any(
@@ -138,8 +152,24 @@ fn validate_mint(tokens: Pairs<ByteArray, Int>) {
   }
 }
 
-fn validate_burn_and_spend(tokens: Pairs<ByteArray, Int>) {
-  if list.all(tokens, fn(Pair(_name, amount)) { amount < 0 }) {
+fn validate_spend(
+  tokens: Pairs<ByteArray, Int>,
+  tx: Transaction,
+  datum: Option<MintingDatum>,
+) {
+  if list.all(
+    tokens,
+    fn(Pair(name, amount)) {
+      if to_bytearray(to_string(name)) == "onetime" {
+        expect Some(datum_info) = datum
+        let MintingDatum { owner } = datum_info
+        let is_signed = list.has(tx.extra_signatories, owner)
+        is_signed && amount < 0
+      } else {
+        amount < 0
+      }
+    },
+  ) {
     trace @"Tokens for spending/burning validated successfully"
     True
   } else {
@@ -148,20 +178,29 @@ fn validate_burn_and_spend(tokens: Pairs<ByteArray, Int>) {
   }
 }
 
-// mock new test
-test custom_spend_operation() {
-  let test_asset_name1 = "always"
-  let test_asset_name2 = "onetime"
-  let utxo = mock_utxo_ref(0, 0)
-  let mint =
-    from_asset_list(
-      [
-        Pair(
-          mock_policy_id(0),
-          [Pair(test_asset_name1, -3), Pair(test_asset_name2, -1)],
-        ),
-      ],
-    )
+fn validate_burn(tokens: Pairs<ByteArray, Int>, tx: Transaction, output: Output) {
+  if list.all(
+    tokens,
+    fn(Pair(name, amount)) {
+      if to_bytearray(to_string(name)) == "onetime" {
+        expect InlineDatum(datum_data) = output.datum
+        expect MintingDatum { owner } = datum_data
+        let is_signed = list.has(tx.extra_signatories, owner)
+        is_signed && amount < 0
+      } else {
+        amount < 0
+      }
+    },
+  ) {
+    trace @"Tokens for spending/burning validated successfully"
+    True
+  } else {
+    trace @"Ooops. Validation of tokens for spending/burning failed"
+    False
+  }
+}
+
+fn get_normal_tx(mint) {
   let tx_input =
     Input {
       output_reference: mock_utxo_ref(0, 0),
@@ -177,7 +216,66 @@ test custom_spend_operation() {
     }
   let tx_inputs = [tx_input]
 
-  let tx = Transaction { ..placeholder, mint: mint, inputs: tx_inputs }
+  Transaction { ..placeholder, mint: mint, inputs: tx_inputs }
+}
+
+fn get_onetime_tx(mint) {
+  let tx_input =
+    Input {
+      output_reference: mock_utxo_ref(0, 0),
+      output: Output {
+        address: Address {
+          payment_credential: Script(mock_policy_id(0)),
+          stake_credential: None,
+        },
+        value: zero,
+        datum: InlineDatum(MintingDatum { owner: mock_pub_key_hash(0) }),
+        reference_script: None,
+      },
+    }
+  let tx_inputs = [tx_input]
+
+  Transaction {
+    ..placeholder,
+    mint: mint,
+    inputs: tx_inputs,
+    extra_signatories: [mock_pub_key_hash(0)],
+  }
+}
+
+// mock new test
+test spend_always_and_onetime() {
+  let utxo = mock_utxo_ref(0, 0)
+
+  let test_asset_name1 = "always"
+  let test_asset_name2 = "onetime"
+  let mint =
+    from_asset_list(
+      [
+        Pair(
+          mock_policy_id(0),
+          [Pair(test_asset_name1, -3), Pair(test_asset_name2, -1)],
+        ),
+      ],
+    )
+
+  let tx = get_onetime_tx(mint)
+
+  custom_minting.spend(
+    utxo,
+    Some(MintingDatum { owner: mock_pub_key_hash(0) }),
+    "",
+    utxo,
+    tx,
+  ) && custom_minting.mint(utxo, Burn, mock_policy_id(0), tx)
+}
+
+test spend_always() {
+  let utxo = mock_utxo_ref(0, 0)
+
+  let mint = from_asset_list([Pair(mock_policy_id(0), [Pair("always", -3)])])
+
+  let tx = get_normal_tx(mint)
 
   custom_minting.spend(utxo, None, "", utxo, tx) && custom_minting.mint(
     utxo,
@@ -187,11 +285,43 @@ test custom_spend_operation() {
   )
 }
 
-test custom_mint_operation() {
+test spend_onetime() {
+  let utxo = mock_utxo_ref(0, 0)
+
+  let mint = from_asset_list([Pair(mock_policy_id(0), [Pair("onetime", -1)])])
+
+  let tx = get_onetime_tx(mint)
+
+  custom_minting.spend(
+    utxo,
+    Some(MintingDatum { owner: mock_pub_key_hash(0) }),
+    "",
+    utxo,
+    tx,
+  ) && custom_minting.mint(utxo, Burn, mock_policy_id(0), tx)
+}
+
+test spend_fenix() {
+  let utxo = mock_utxo_ref(0, 0)
+
+  let mint = from_asset_list([Pair(mock_policy_id(0), [Pair("fenix", -1)])])
+
+  let tx = get_normal_tx(mint)
+
+  custom_minting.spend(utxo, None, "", utxo, tx) && custom_minting.mint(
+    utxo,
+    Burn,
+    mock_policy_id(0),
+    tx,
+  )
+}
+
+test mint_fenix() {
+  let utxo = mock_utxo_ref(0, 0)
+
   let test_asset_name1 = "always"
   let test_asset_name2 = "onetime"
   let test_asset_name3 = "fenix"
-  let utxo = mock_utxo_ref(0, 0)
   let mint =
     from_asset_list(
       [
@@ -205,22 +335,29 @@ test custom_mint_operation() {
         ),
       ],
     )
-  let tx_input =
-    Input {
-      output_reference: mock_utxo_ref(0, 0),
-      output: Output {
-        address: Address {
-          payment_credential: Script(mock_policy_id(0)),
-          stake_credential: None,
-        },
-        value: zero,
-        datum: NoDatum,
-        reference_script: None,
-      },
-    }
-  let tx_inputs = [tx_input]
 
-  let tx = Transaction { ..placeholder, mint: mint, inputs: tx_inputs }
+  let tx = get_onetime_tx(mint)
+
+  // mint and spend
+  custom_minting.mint(utxo, Mint, mock_policy_id(0), tx)
+}
+
+test mint_always() {
+  let utxo = mock_utxo_ref(0, 0)
+
+  let mint = from_asset_list([Pair(mock_policy_id(0), [Pair("always", 3)])])
+
+  let tx = get_normal_tx(mint)
+
+  custom_minting.mint(utxo, Mint, mock_policy_id(0), tx)
+}
+
+test mint_onetime() {
+  let utxo = mock_utxo_ref(0, 0)
+
+  let mint = from_asset_list([Pair(mock_policy_id(0), [Pair("onetime", 1)])])
+
+  let tx = get_onetime_tx(mint)
 
   custom_minting.mint(utxo, Mint, mock_policy_id(0), tx)
 }
