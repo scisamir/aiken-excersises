@@ -4,7 +4,7 @@ use aiken/crypto.{VerificationKeyHash}
 use aiken/primitive/bytearray.{to_string}
 use aiken/primitive/string.{to_bytearray}
 use cardano/address.{Address, Script}
-use cardano/assets.{PolicyId, from_asset_list, zero}
+use cardano/assets.{PolicyId, from_asset, from_asset_list, zero}
 use cardano/transaction.{
   Input, NoDatum, Output, OutputReference, Transaction, placeholder,
 }
@@ -269,9 +269,8 @@ test mint_onetime() {
   )
 }
 
-test fail_mint_onetime() {
+test fail_mint_onetime() fail {
   // Testing onetime minting with different input utxos
-  // If program crashes and test shows failed, it means the test is successful
   // Error parameter is a wrong output reference in tx2
 
   let utxo = mock_utxo_ref(0, 0)
@@ -316,4 +315,14 @@ test fail_mint_onetime() {
     mock_policy_id(0),
     tx2,
   )
+}
+
+test mint_single_always() {
+  let utxo = mock_utxo_ref(0, 0)
+
+  let mint = from_asset(mock_policy_id(0), "always", 3)
+
+  let tx = get_tx(mint, [])
+
+  custom_minting.mint(utxo, None, Mint, mock_policy_id(0), tx)
 }
