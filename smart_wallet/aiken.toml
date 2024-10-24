@@ -1,0 +1,23 @@
+name = "scisamir/smart_wallet"
+version = "0.0.0"
+compiler = "v1.1.4"
+plutus = "v3"
+license = "Apache-2.0"
+description = "Aiken contracts for project 'scisamir/smart_wallet'"
+
+[repository]
+user = "scisamir"
+project = "smart_wallet"
+platform = "github"
+
+[[dependencies]]
+name = "aiken-lang/stdlib"
+version = "v2.1.0"
+source = "github"
+
+[[dependencies]]
+name = "sidan-lab/vodka"
+version = "0.1.1-beta"
+source = "github"
+
+[config]
