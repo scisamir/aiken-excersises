@@ -1,9 +1,8 @@
-import { BlockfrostProvider, MeshTxBuilder, MeshWallet, applyParamsToScript, deserializeAddress, serializePlutusScript, } from "@meshsdk/core";
+import { BlockfrostProvider, MeshTxBuilder, MeshWallet, applyParamsToScript, deserializeAddress, serializeNativeScript, serializePlutusScript, } from "@meshsdk/core";
 import { builtinByteString, conStr, list } from "@meshsdk/common";
 import dotenv from "dotenv";
 dotenv.config();
 const blockfrostId = process.env.BLOCKFROST_ID;
-console.log('blockfrost id:', blockfrostId);
 const blockchainProvider = new BlockfrostProvider(blockfrostId);
 const wallet1Passphrase = process.env.WALLET_PASSPHRASE_ONE;
 const wallet = new MeshWallet({
@@ -27,7 +26,6 @@ const wallet2 = new MeshWallet({
 });
 const address = await wallet.getChangeAddress();
 const addressMulti = await wallet2.getChangeAddress();
-console.log('Address:', address, '\n', 'Address Multi:', addressMulti);
 const utxos = await wallet.getUtxos();
 const collateral = (await wallet.getCollateral())[0];
 if (!collateral) {
@@ -39,6 +37,25 @@ const parameterizedScript = applyParamsToScript('5901600101003232323232322253330
 const scriptAddr = serializePlutusScript({ code: parameterizedScript, version: 'V3' }, undefined, 0).address;
 const parameterizedScriptMulti = applyParamsToScript('590160010100323232323232225333003323232323253330083370e900118049baa0011323232533300b3232533300d3370e900018071baa00c13300237586002601e6ea8024dd7180898079baa00c132330010013758602460206ea8034894ccc0480045288992999808198029bac3004301237540186eb8c0500084cc00c00c004528180a00091808980918091809180918091809180918090009119198008008019129998090008a5013253330103371e6eb8c050008010528899801801800980a0008a99980599b8748000c030dd5000899991119299980799b8748008c040dd5000899b89002375a602660226ea8004528180198081baa30033010375400446020002601e6020602060206020602060206020601a6ea801cdd6980798069baa300f300d3754002294452818071807801180680098051baa00116300b300c002300a001300a00230080013005375400229309b2b2b9a5573aaae7955cfaba15745', [conStr(1, [list([builtinByteString(vk), builtinByteString(vkMulti)])])], "JSON");
 const scriptAddrMulti = serializePlutusScript({ code: parameterizedScriptMulti, version: 'V3' }, undefined, 0).address;
+// Construct Multisig address
+const nativeScript = {
+    type: "all",
+    scripts: [
+        {
+            type: "sig",
+            keyHash: vk,
+        },
+        {
+            type: "sig",
+            keyHash: vkMulti,
+        },
+    ],
+};
+const { address: multiSigAddress, scriptCbor: multiSigCbor } = serializeNativeScript(nativeScript);
+console.log("addr1:", address);
+console.log("addr2:", addressMulti);
+console.log("MultiAddress:", multiSigAddress);
+// Create transaction builder
 const txBuilder = new MeshTxBuilder({
     fetcher: blockchainProvider,
     submitter: blockchainProvider
@@ -50,7 +67,7 @@ const txBuilder = new MeshTxBuilder({
 //     .selectUtxosFrom(utxos)
 //     .complete();
 // Unlock without Datum
-// const lockedUTxos = await blockchainProvider.fetchAddressUTxOs('addr_test1wz3mc2cpvve36w8rxd5s6fq0vcysrjmgywrzl44d3ju29mgkwv49l');
+// const lockedUTxos = await blockchainProvider.fetchAddressUTxOs(scriptAddr);
 // console.log(lockedUTxos);
 // const lockedUTxo = lockedUTxos[0];
 // const unlockWithoutDatumTx = await txBuilder
@@ -61,6 +78,8 @@ const txBuilder = new MeshTxBuilder({
 //         lockedUTxo.output.amount,
 //         scriptAddr
 //     )
+//     .spendingReferenceTxInInlineDatumPresent()
+//     .spendingReferenceTxInRedeemerValue("")
 //     .txInScript(parameterizedScript)
 //     .txOut(address, [])
 //     .txInCollateral(
@@ -83,7 +102,7 @@ const txBuilder = new MeshTxBuilder({
 //     .selectUtxosFrom(utxos)
 //     .complete();
 // Unlock with Datum
-// const lockedUTxosWithDatum = await blockchainProvider.fetchAddressUTxOs('addr_test1wz3mc2cpvve36w8rxd5s6fq0vcysrjmgywrzl44d3ju29mgkwv49l');
+// const lockedUTxosWithDatum = await blockchainProvider.fetchAddressUTxOs(scriptAddr);
 // console.log(lockedUTxosWithDatum);
 // const lockedUTxoWithDatum = lockedUTxosWithDatum[1];
 // const invalidBefore = unixTimeToEnclosingSlot(
@@ -123,7 +142,7 @@ const txBuilder = new MeshTxBuilder({
 //     .selectUtxosFrom(utxos)
 //     .complete();
 // Unlock with Datum MultiSig
-// const lockedUTxosWithDatumMultiSig = await blockchainProvider.fetchAddressUTxOs('addr_test1wryafzfrgcluyasql7uqw2r7y3pfzu7ef2vvcdn9jkrr82s9pex92');
+// const lockedUTxosWithDatumMultiSig = await blockchainProvider.fetchAddressUTxOs(scriptAddrMulti);
 // console.log(lockedUTxosWithDatumMultiSig);
 // const lockedUTxoWithDatumMultiSig = lockedUTxosWithDatumMultiSig[0];
 // const invalidBeforeMultiSig = unixTimeToEnclosingSlot(
@@ -154,7 +173,34 @@ const txBuilder = new MeshTxBuilder({
 //     .changeAddress(address)
 //     .selectUtxosFrom(utxos)
 //     .complete();
+// Sign tx for single sig
+// const signedTx = await wallet.signTx(unlockWithoutDatumTx);
+// const txHash = await wallet.submitTx(signedTx);
+// // Sign tx for multisig
 // const initialSignedTx = await wallet.signTx(unlockWithDatumMultiSigTx, true);
 // const signedTx = await wallet2.signTx(initialSignedTx, true);
 // const txHash = await wallet.submitTx(signedTx);
 // console.log(`\ntx hash: ${txHash}\n`);
+// Multisig send
+const multiWallet = new MeshWallet({
+    networkId: 0,
+    fetcher: blockchainProvider,
+    key: {
+        type: 'address',
+        address: 'addr_test1wqjg79rjzf493ds8536740y238l8n7meqn4d7geqr3ssk2chntddc',
+    },
+});
+const utxosMulti = await blockchainProvider.fetchAddressUTxOs('addr_test1wqjg79rjzf493ds8536740y238l8n7meqn4d7geqr3ssk2chntddc');
+const utxoMulti = utxosMulti[0];
+// console.log('utxosMulti:', utxosMulti);
+const txMulti = await txBuilder
+    .txIn(utxoMulti.input.txHash, utxoMulti.input.outputIndex, utxoMulti.output.amount, utxoMulti.output.address)
+    .txInScript(multiSigCbor)
+    .txOut("addr_test1qztvhvnujmd03j4cjr0x6lu87hlaqfdl3tyqw97tcnaw0kk5wsnj53x9v8dhupg6v8rzt48atr6zmrvlppkam7upd29sqeutm7", [{ unit: "lovelace", quantity: "2000000" }])
+    .changeAddress(multiSigAddress)
+    .selectUtxosFrom(utxosMulti)
+    .complete();
+const unsignedTxMulti1 = await wallet.signTx(txMulti, true);
+const unsignedTxMulti2 = await wallet2.signTx(unsignedTxMulti1, true);
+const txHash = await wallet2.submitTx(unsignedTxMulti2);
+console.log('Multi tx hash:', txHash);
