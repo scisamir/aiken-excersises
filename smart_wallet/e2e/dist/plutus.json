@@ -1,0 +1,114 @@
+{
+    "preamble": {
+        "title": "scisamir/smart_wallet",
+        "description": "Aiken contracts for project 'scisamir/smart_wallet'",
+        "version": "0.0.0",
+        "plutusVersion": "v3",
+        "compiler": {
+            "name": "Aiken",
+            "version": "v1.1.4+79d0e45"
+        },
+        "license": "Apache-2.0"
+    },
+    "validators": [
+        {
+            "title": "smart_wallet.smart_wallet.spend",
+            "datum": {
+                "title": "datum",
+                "schema": {
+                    "$ref": "#/definitions/smart_wallet~1SWDatum"
+                }
+            },
+            "redeemer": {
+                "title": "_r",
+                "schema": {
+                    "$ref": "#/definitions/Data"
+                }
+            },
+            "parameters": [
+                {
+                    "title": "user",
+                    "schema": {
+                        "$ref": "#/definitions/smart_wallet~1User"
+                    }
+                }
+            ],
+            "compiledCode": "59017a01010032323232323232225333003323232323253330083370e900118049baa001132323232533300c32533300d3370e900018071baa00c13322323300100100322533301400114a0264a66602466e3cdd7180b8010020a5113300300300130170013758602460266026602660266026602660266026601e6ea8024dd7180918079baa00c132323300100100322533301300114a0264a66602266ebcc018c04cdd5180318099baa3016301730133754602c00400829444cc00c00c004c058004cdd2a4004660226024601e6ea80312f5c06eb0c044c038dd50040a99980619b8748000c034dd50010999119299980799b8748008c040dd5000899b89002375a602860226ea8004528180198081baa30033010375400460226024602460246024602460246024601c6ea8020dd6980898071baa3011300e375400429445281180880098079808001180700098051baa00116300c300d002300b001300b00230090013005375400229309b2b2b9a5573aaae7955cfaba05742ae89",
+            "hash": "3ae2c4689d6524dbefe7d64e34ce56c1c3a88daaff7001c93791fc30"
+        },
+        {
+            "title": "smart_wallet.smart_wallet.else",
+            "redeemer": {
+                "schema": {}
+            },
+            "parameters": [
+                {
+                    "title": "user",
+                    "schema": {
+                        "$ref": "#/definitions/smart_wallet~1User"
+                    }
+                }
+            ],
+            "compiledCode": "59017a01010032323232323232225333003323232323253330083370e900118049baa001132323232533300c32533300d3370e900018071baa00c13322323300100100322533301400114a0264a66602466e3cdd7180b8010020a5113300300300130170013758602460266026602660266026602660266026601e6ea8024dd7180918079baa00c132323300100100322533301300114a0264a66602266ebcc018c04cdd5180318099baa3016301730133754602c00400829444cc00c00c004c058004cdd2a4004660226024601e6ea80312f5c06eb0c044c038dd50040a99980619b8748000c034dd50010999119299980799b8748008c040dd5000899b89002375a602860226ea8004528180198081baa30033010375400460226024602460246024602460246024601c6ea8020dd6980898071baa3011300e375400429445281180880098079808001180700098051baa00116300c300d002300b001300b00230090013005375400229309b2b2b9a5573aaae7955cfaba05742ae89",
+            "hash": "3ae2c4689d6524dbefe7d64e34ce56c1c3a88daaff7001c93791fc30"
+        }
+    ],
+    "definitions": {
+        "Data": {
+            "title": "Data",
+            "description": "Any Plutus data."
+        },
+        "Int": {
+            "dataType": "integer"
+        },
+        "ScriptHash": {
+            "title": "ScriptHash",
+            "dataType": "bytes"
+        },
+        "VerificationKeyHash": {
+            "title": "VerificationKeyHash",
+            "dataType": "bytes"
+        },
+        "smart_wallet/SWDatum": {
+            "title": "SWDatum",
+            "anyOf": [
+                {
+                    "title": "SWDatum",
+                    "dataType": "constructor",
+                    "index": 0,
+                    "fields": [
+                        {
+                            "title": "lock_duration",
+                            "$ref": "#/definitions/Int"
+                        }
+                    ]
+                }
+            ]
+        },
+        "smart_wallet/User": {
+            "title": "User",
+            "anyOf": [
+                {
+                    "title": "SingleSigner",
+                    "dataType": "constructor",
+                    "index": 0,
+                    "fields": [
+                        {
+                            "$ref": "#/definitions/VerificationKeyHash"
+                        }
+                    ]
+                },
+                {
+                    "title": "MultiSigner",
+                    "dataType": "constructor",
+                    "index": 1,
+                    "fields": [
+                        {
+                            "$ref": "#/definitions/ScriptHash"
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+}
