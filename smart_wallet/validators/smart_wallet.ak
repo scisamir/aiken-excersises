@@ -1,12 +1,13 @@
 use aiken/collection/list
-use aiken/crypto.{VerificationKeyHash}
+use aiken/crypto.{ScriptHash, VerificationKeyHash}
 use aiken/interval.{Finite}
-use cardano/transaction.{Transaction, ValidityRange, placeholder}
+use cardano/address.{Script}
+use cardano/transaction.{Input, Transaction, ValidityRange, placeholder}
 use mocktail/virgin_key_hash.{mock_pub_key_hash}
 
 pub type User {
   SingleSigner(VerificationKeyHash)
-  MultiSigner(List<VerificationKeyHash>)
+  MultiSigner(ScriptHash)
 }
 
 pub type SWDatum {
@@ -15,8 +16,10 @@ pub type SWDatum {
 
 validator smart_wallet(user: User) {
   spend(datum: Option<SWDatum>, _r: Data, _o: Data, self: Transaction) {
+    let Transaction { inputs, .. } = self
+
     and {
-      is_signed(self, user),
+      is_signed(self, user, inputs),
       when datum is {
         Some(SWDatum { lock_duration }) ->
           is_time_reached(self.validity_range, lock_duration)
@@ -30,11 +33,20 @@ validator smart_wallet(user: User) {
   }
 }
 
-fn is_signed(tx: Transaction, user: User) {
+fn is_signed(tx: Transaction, user: User, inputs: List<Input>) {
   when user is {
-    SingleSigner(signer) -> list.has(tx.extra_signatories, signer)
-    MultiSigner(signer) ->
-      list.all(signer, fn(vk) { list.has(tx.extra_signatories, vk) })
+    SingleSigner(signer_vk) -> list.has(tx.extra_signatories, signer_vk)
+
+    MultiSigner(script_hash) -> {
+      let script_cred = Script(script_hash)
+      list.any(
+        inputs,
+        fn(input) {
+          let address = input.output.address
+          address.payment_credential == script_cred
+        },
+      )
+    }
   }
 }
 
@@ -55,19 +67,4 @@ test test_single_signer() {
   let tx = get_tx([mock_pub_key_hash(0)])
 
   smart_wallet.spend(SingleSigner(mock_pub_key_hash(0)), None, "", "", tx)
-}
-
-test test_multi_signer() {
-  let tx =
-    get_tx([mock_pub_key_hash(0), mock_pub_key_hash(1), mock_pub_key_hash(2)])
-
-  smart_wallet.spend(
-    MultiSigner(
-      [mock_pub_key_hash(0), mock_pub_key_hash(1), mock_pub_key_hash(2)],
-    ),
-    None,
-    "",
-    "",
-    tx,
-  )
 }

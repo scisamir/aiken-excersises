@@ -5,7 +5,7 @@ console.log(lockedUTxos);
 const lockedUTxo = lockedUTxos[0];
 
 // throw error for an invalid utxo
-if (!lockedUTxos) {
+if (!lockedUTxo) {
     throw new Error("No utxos to unlock");
 }
 // todo -> instead, filter the list of utxos to find the ones without datum, if there are none, throw an error

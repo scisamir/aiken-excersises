@@ -1,9 +1,8 @@
 import { SLOT_CONFIG_NETWORK, unixTimeToEnclosingSlot } from "@meshsdk/common";
 import { blockchainProvider, txBuilder, scriptAddrSingleSig, parameterizedScriptSinglesig, wallet1Address, wallet1Collateral, wallet1VK, wallet1Utxos, wallet1 } from "../../smart_wallet.js";
 const lockedUTxosWithDatum = await blockchainProvider.fetchAddressUTxOs(scriptAddrSingleSig);
-// console.log(lockedUTxosWithDatum);
-const lockedUTxoWithDatum = lockedUTxosWithDatum[2];
-console.log('utxo to unlock:', lockedUTxoWithDatum);
+console.log(lockedUTxosWithDatum);
+const lockedUTxoWithDatum = lockedUTxosWithDatum[0];
 // throw error for an invalid utxo
 if (!lockedUTxoWithDatum) {
     throw new Error("No utxos to unlock");

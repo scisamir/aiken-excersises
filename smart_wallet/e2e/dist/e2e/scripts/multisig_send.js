@@ -1,4 +1,7 @@
 import { blockchainProvider, txBuilder, multiSigCbor, multiSigAddress, wallet1, wallet2 } from "../smart_wallet.js";
+if (!multiSigCbor) {
+    throw new Error('Multisig script serialization failed!');
+}
 const utxosMulti = await blockchainProvider.fetchAddressUTxOs('addr_test1wqjg79rjzf493ds8536740y238l8n7meqn4d7geqr3ssk2chntddc');
 const utxoMulti = utxosMulti[0];
 // throw error for an invalid utxo

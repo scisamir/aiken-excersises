@@ -1,5 +1,9 @@
 import { blockchainProvider, txBuilder, multiSigCbor, multiSigAddress, wallet1, wallet2 } from "../smart_wallet.js";
 
+if (!multiSigCbor) {
+    throw new Error('Multisig script serialization failed!');
+}
+
 const utxosMulti = await blockchainProvider.fetchAddressUTxOs('addr_test1wqjg79rjzf493ds8536740y238l8n7meqn4d7geqr3ssk2chntddc');
 const utxoMulti = utxosMulti[0];
 
@@ -15,7 +19,7 @@ const txMulti = await txBuilder
         utxoMulti.output.amount,
         utxoMulti.output.address,
     )
-    .txInScript(multiSigCbor!)
+    .txInScript(multiSigCbor)
     .txOut(
         "addr_test1qztvhvnujmd03j4cjr0x6lu87hlaqfdl3tyqw97tcnaw0kk5wsnj53x9v8dhupg6v8rzt48atr6zmrvlppkam7upd29sqeutm7",
         [{ unit: "lovelace", quantity: "2000000" }],

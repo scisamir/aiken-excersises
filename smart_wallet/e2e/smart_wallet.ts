@@ -13,10 +13,24 @@ import dotenv from "dotenv";
 dotenv.config();
 import blueprint from "../plutus.json" with { type: "json" };
 
-const blockfrostId = process.env.BLOCKFROST_ID!;
+const blockfrostId = process.env.BLOCKFROST_ID;
+if (!blockfrostId) {
+    throw new Error("BLOCKFROST_ID does not exist");
+}
 const blockchainProvider = new BlockfrostProvider(blockfrostId);
+// const maestroKey = process.env.MAESTRO_KEY;
+// if (!maestroKey) {
+//     throw new Error("MAESTRO_KEY does not exist");
+// }
+// const blockchainProvider = new MaestroProvider({
+//     network: 'Preprod',
+//     apiKey: maestroKey,
+// });
 
-const wallet1Passphrase = process.env.WALLET_PASSPHRASE_ONE!;
+const wallet1Passphrase = process.env.WALLET_PASSPHRASE_ONE;
+if (!wallet1Passphrase) {
+    throw new Error("WALLET_PASSPHRASE_ONE does not exist");
+}
 const wallet1 = new MeshWallet({
     networkId: 0,
     fetcher: blockchainProvider,
@@ -27,7 +41,10 @@ const wallet1 = new MeshWallet({
     },
 });
 
-const wallet2Passphrase = process.env.WALLET_PASSPHRASE_TWO!;
+const wallet2Passphrase = process.env.WALLET_PASSPHRASE_TWO;
+if (!wallet2Passphrase) {
+    throw new Error("WALLET_PASSPHRASE_TWO does not exist");
+}
 const wallet2 = new MeshWallet({
     networkId: 0,
     fetcher: blockchainProvider,
@@ -104,8 +121,10 @@ const scriptAddrMultisig = serializePlutusScript(
 // Create transaction builder
 const txBuilder = new MeshTxBuilder({
     fetcher: blockchainProvider,
-    submitter: blockchainProvider
+    submitter: blockchainProvider,
+    verbose: false,
 });
+txBuilder.setNetwork('preprod');
 
 export {
     blockchainProvider,

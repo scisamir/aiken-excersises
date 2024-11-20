@@ -1,5 +1,5 @@
 # Locking
--   `5000000n` lovelaces (5 ADA) is locked to the contract address
+-   `100n` lovelaces is locked to the contract address
 -   A datum containing the signer's `vkh` and the `target_value` is locked with it. `target_value` is `100n`. The datum is an inline datum
 
 
